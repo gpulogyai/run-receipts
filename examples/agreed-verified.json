@@ -1,0 +1,26 @@
+{
+  "receiptVersion": "0.1",
+  "id": "example-agreed-verified",
+  "producer": { "name": "example-producer", "version": "0.0.1" },
+  "endedAt": "2026-11-10T16:42:07Z",
+  "revision": "4f1c2ab90d3e",
+  "durationMs": 184300,
+  "firstReplyMs": 2100,
+  "tokens": 61240,
+  "costUsd": 0.4312,
+  "seats": [
+    { "name": "Claude", "role": "lead", "model": "claude-sonnet-5-5", "family": "claude", "turns": 3, "errors": 0, "timeouts": 0, "durationMs": 96200, "costUsd": 0.2871, "costBasis": "metered" },
+    { "name": "Gemini", "role": "reviewer", "model": "gemini-3-pro", "family": "gemini", "turns": 2, "errors": 0, "timeouts": 0, "durationMs": 41800, "costUsd": 0.0935, "costBasis": "metered", "stance": "agreed" },
+    { "name": "ChatGPT", "role": "reviewer", "model": "gpt-5.2", "family": "openai", "turns": 2, "errors": 1, "timeouts": 1, "durationMs": 46300, "costUsd": 0.0506, "costBasis": "metered", "stance": "agreed" }
+  ],
+  "verdict": { "outcome": "agreed", "agreed": 2, "reviewers": 2, "holdouts": [] },
+  "checks": [
+    { "by": "Gemini", "alsoBy": ["ChatGPT"], "purpose": "Run the unit tests", "command": "npm test", "exitCode": 0, "result": "42 passing", "revision": "4f1c2ab90d3e", "where": "local", "deployed": false, "missingSetup": null, "state": "checked", "durationMs": 8400 },
+    { "by": "ChatGPT", "purpose": "Check types", "command": "npm run typecheck", "exitCode": 0, "result": "", "revision": "4f1c2ab90d3e", "where": "local", "deployed": false, "missingSetup": null, "state": "checked", "durationMs": 5100 },
+    { "by": "Gemini", "purpose": "Ask the staging health endpoint", "command": "curl -fsS https://staging.example.com/healthz", "exitCode": 0, "result": "ok", "revision": null, "where": "local", "deployed": true, "missingSetup": null, "state": "checked" }
+  ],
+  "totals": { "reviewers": 2, "verifiers": 2, "notVisible": 0, "contradicted": 0, "ran": 5, "passed": 4, "failed": 1, "failingNow": 0, "resolved": 1, "filesChanged": 3 },
+  "grade": "verified",
+  "gaps": ["Behaviour under production load"],
+  "digest": "sha256:12b44c77459b21d7d99682b9a75a620d7ee5aae1ef0f581ce5e0e5df677334ab"
+}

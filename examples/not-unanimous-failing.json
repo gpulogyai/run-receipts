@@ -1,0 +1,38 @@
+{
+  "receiptVersion": "0.1",
+  "id": "example-not-unanimous-failing",
+  "producer": { "name": "example-producer", "version": "0.0.1" },
+  "endedAt": "2026-11-10T18:05:51Z",
+  "revision": "9a07de41c6b2 + uncommitted changes",
+  "durationMs": 402900,
+  "tokens": 138700,
+  "costUsd": 0.2204,
+  "seats": [
+    { "name": "Codex", "role": "lead", "model": "gpt-5.2-codex", "family": "openai", "turns": 4, "errors": 0, "timeouts": 0, "durationMs": 211000, "costUsd": 0, "costBasis": "subscription" },
+    { "name": "Claude", "role": "reviewer", "model": "claude-sonnet-5-5", "family": "claude", "turns": 3, "errors": 0, "timeouts": 0, "durationMs": 98400, "costUsd": 0.2204, "costBasis": "metered", "stance": "objected" },
+    { "name": "Gemini", "role": "reviewer", "model": "gemini-3-pro", "family": "gemini", "turns": 3, "errors": 0, "timeouts": 0, "durationMs": 77100, "costUsd": 0, "costBasis": "subscription", "stance": "agreed", "commandsVisible": false },
+    { "name": "Grok", "role": "reviewer", "model": "grok-5", "family": "xai", "turns": 0, "errors": 2, "timeouts": 2, "durationMs": 0, "costUsd": 0, "costBasis": "unpriced", "stance": "unavailable" }
+  ],
+  "verdict": {
+    "outcome": "none",
+    "agreed": 1,
+    "reviewers": 3,
+    "holdouts": [
+      { "name": "Claude", "stance": "objected" },
+      { "name": "Grok", "stance": "unavailable" }
+    ]
+  },
+  "checks": [
+    { "by": "Claude", "purpose": "Run the migration tests", "command": "pytest tests/test_migrate.py -q", "exitCode": 1, "result": "1 failed, 11 passed", "revision": "9a07de41c6b2 + uncommitted changes", "where": "local", "deployed": false, "missingSetup": null, "state": "reproduced", "durationMs": 12900 },
+    { "by": "Claude", "purpose": "Run the tests against Postgres", "command": "pytest tests/test_migrate.py -q --db postgres", "exitCode": 1, "result": "connection refused", "revision": "9a07de41c6b2 + uncommitted changes", "where": "local", "deployed": false, "missingSetup": "a service it needs was not reachable", "state": "blocked" },
+    { "by": null, "command": "make lint", "exitCode": null, "result": "", "revision": null, "where": "ci", "deployed": false, "missingSetup": null, "state": "unknown" }
+  ],
+  "totals": { "reviewers": 2, "verifiers": 1, "notVisible": 1, "contradicted": 0, "ran": 3, "passed": 0, "failed": 2, "failingNow": 2, "filesChanged": 6 },
+  "grade": "failed",
+  "gaps": [
+    "Checked locally only; deployed behaviour not verified",
+    "Behaviour on the hosted database",
+    "Gemini's commands could not be seen"
+  ],
+  "digest": "sha256:1e471ce1e3b03fb7fef58f3d56bd08cee3684c499f002e3ffdd5b64334f5170f"
+}

@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://letthembuild.com/schemas/run-receipt/0.1/receipt.schema.json",
+  "title": "Run receipt",
+  "description": "What one multi-model run did and how well its result was checked: who took part, what was run, what passed, and what nobody verified. Figures and commands only; never a prompt, a reply or a file's contents.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["receiptVersion", "producer", "endedAt", "durationMs", "tokens", "costUsd", "seats", "verdict", "checks", "totals", "grade", "gaps"],
+  "properties": {
+    "receiptVersion": { "const": "0.1" },
+    "id": { "type": "string", "minLength": 1, "maxLength": 200, "description": "An opaque id chosen by the producer. Carries no meaning to a verifier." },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 40 }
+      }
+    },
+    "endedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$", "description": "When the run ended, UTC, RFC 3339." },
+    "revision": { "type": ["string", "null"], "maxLength": 60, "description": "The commit the work ended on, if it was in a repository." },
+    "durationMs": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+    "firstReplyMs": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+    "tokens": { "type": "integer", "minimum": 0, "maximum": 2000000000 },
+    "costUsd": { "type": "number", "minimum": 0, "maximum": 1000000 },
+    "seats": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "$ref": "#/$defs/seat" } },
+    "verdict": { "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/verdict" }] },
+    "checks": { "type": "array", "maxItems": 200, "items": { "$ref": "#/$defs/check" } },
+    "totals": { "$ref": "#/$defs/totals" },
+    "grade": { "enum": ["failed", "verified", "partial", "not-visible", "reviewed", "unverified"] },
+    "gaps": { "type": "array", "maxItems": 50, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "$defs": {
+    "stance": { "enum": ["agreed", "objected", "silent", "unavailable"] },
+    "seat": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "role", "model", "turns", "errors", "timeouts", "durationMs", "costUsd"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "role": { "enum": ["lead", "reviewer"] },
+        "model": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "family": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "turns": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "errors": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "timeouts": { "type": "integer", "minimum": 0, "maximum": 1000 },
+        "durationMs": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+        "costUsd": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "costBasis": { "enum": ["metered", "subscription", "unpriced"] },
+        "stance": { "$ref": "#/$defs/stance" },
+        "commandsVisible": { "type": "boolean", "description": "False when the seat worked inside a tool whose commands the producer could not see." }
+      }
+    },
+    "holdout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "stance"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "stance": { "enum": ["objected", "silent", "unavailable"] }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "agreed", "reviewers", "holdouts"],
+      "properties": {
+        "outcome": { "enum": ["agreed", "majority", "none"] },
+        "agreed": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "reviewers": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "holdouts": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/holdout" } }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["by", "command", "exitCode", "where", "deployed", "missingSetup", "state"],
+      "properties": {
+        "by": { "type": ["string", "null"], "maxLength": 60 },
+        "alsoBy": { "type": "array", "maxItems": 4, "items": { "type": "string", "minLength": 1, "maxLength": 60 } },
+        "purpose": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "command": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "exitCode": { "type": ["integer", "null"] },
+        "result": { "type": "string", "maxLength": 200, "description": "One line of the command's output. Never the whole output." },
+        "revision": { "type": ["string", "null"], "maxLength": 60 },
+        "where": { "enum": ["local", "ci", "cloud", "other"] },
+        "deployed": { "type": "boolean", "description": "True when the command reached the place the work actually runs." },
+        "missingSetup": { "type": ["string", "null"], "maxLength": 120 },
+        "state": { "enum": ["checked", "reproduced", "blocked", "unknown", "untested"] },
+        "durationMs": { "type": "integer", "minimum": 0, "maximum": 86400000 }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reviewers", "verifiers", "ran", "passed", "failed", "failingNow", "contradicted"],
+      "properties": {
+        "reviewers": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "verifiers": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "notVisible": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "contradicted": { "type": "integer", "minimum": 0, "maximum": 32 },
+        "ran": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "passed": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "failed": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "failingNow": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "expected": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "resolved": { "type": "integer", "minimum": 0, "maximum": 100000 },
+        "filesChanged": { "type": "integer", "minimum": 0, "maximum": 100000 }
+      }
+    }
+  }
+}
