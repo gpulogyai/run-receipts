@@ -25,6 +25,7 @@
     "verify.mjs",
     "receipt.schema.json",
     "SPEC.md",
+    "PRODUCERS.md",
     "examples",
     "NOTICE"
   ],
@@ -32,7 +33,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test verify.test.mjs action.test.mjs"
+    "test": "node --test verify.test.mjs action.test.mjs produce.test.mjs"
   },
   "keywords": [
     "receipt",
