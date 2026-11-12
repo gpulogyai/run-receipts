@@ -14,6 +14,8 @@ This repository holds:
 
 The format is not tied to any one product. Any tool that runs one model to do work and others to review it can write a receipt.
 
+Maintained by GPULogy AI LLC, the makers of [LetThemBuild](https://letthembuild.com), an app where several AI models do the work and review each other. Run receipts began as its record of what a run actually checked.
+
 ## What a receipt looks like
 
 ```json
