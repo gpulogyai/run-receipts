@@ -216,7 +216,7 @@ export function render(results, problems = []) {
   }
   for (const res of results) parts.push(receiptSection(res, many));
   for (const p of problems) parts.push(`Note: ${text(p, 300)}`);
-  parts.push("<sub>A valid receipt is consistent with itself and, when it carries a digest, unchanged since it was written. It is the producer's own account: verifying it does not prove the commands were run. Format: <a href=\"https://github.com/gpulogyai/run-receipts\">run receipts</a> 0.1.</sub>");
+  parts.push("<sub>A valid receipt is consistent with itself and, when it carries a digest, unchanged since it was written. It is the producer's own account: verifying it does not prove the commands were run. Format: <a href=\"https://github.com/letthembuild/run-receipts\">run receipts</a> 0.1.</sub>");
   let body = parts.join("\n\n");
   if (body.length > MAX_BODY) body = body.slice(0, MAX_BODY).replace(/&#?\w*$/, "") + "\n\n…the report was cut here; the job summary has the rest.";
   return body;

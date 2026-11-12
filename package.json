@@ -1,16 +1,16 @@
 {
   "name": "@letthembuild/run-receipts",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A format for recording how well an AI run checked its own work, and a verifier for it.",
   "license": "Apache-2.0",
   "author": "GPULogy AI LLC",
-  "homepage": "https://github.com/gpulogyai/run-receipts#readme",
+  "homepage": "https://github.com/letthembuild/run-receipts#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gpulogyai/run-receipts.git"
+    "url": "git+https://github.com/letthembuild/run-receipts.git"
   },
   "bugs": {
-    "url": "https://github.com/gpulogyai/run-receipts/issues"
+    "url": "https://github.com/letthembuild/run-receipts/issues"
   },
   "type": "module",
   "main": "./verify.mjs",
