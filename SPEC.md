@@ -8,7 +8,7 @@ Several models agreeing on an answer is not evidence that the answer is right. A
 
 A receipt holds figures, names and commands. It never holds a prompt, a model's reply, a file's contents or a command's full output.
 
-A receipt is the producer's account of the run. A verifier can prove that the account is well-formed, consistent with itself and unchanged since its digest was taken. It cannot prove the run happened as described. See "What a verifier cannot tell you".
+A receipt is the producer's account of the run. A verifier can prove that the account is well-formed, consistent with itself and unchanged since its digest was taken, and, when it is signed, which keys put their name to it. It cannot prove the run happened as described. See "What a verifier cannot tell you".
 
 ## Vocabulary
 
@@ -43,6 +43,7 @@ A receipt is one JSON object, UTF-8. `receipt.schema.json` is the normative shap
 | `grade` | yes | One word for how well the result was checked. |
 | `gaps` | yes | What was not verified. May be empty, and is listed even when everyone agreed. |
 | `digest` | no | `sha256:` and 64 hex characters over the canonical form. |
+| `signatures` | no | One to eight signatures over the digest. See "Signatures". |
 
 ### Seat
 
@@ -166,13 +167,43 @@ A producer may record `majority` or `none` where V4 would allow `agreed`: a run 
 - D1. If `digest` is present it equals the digest of the receipt.
 - D2 (warning). No digest is present.
 
+**Signatures**
+- K1. Every signature is its key's signature over this receipt.
+- K2. No key signs twice.
+- K3. Only when the reader requires a signature: at least one signature is from a key the reader trusts.
+
 Warnings do not make a receipt invalid.
 
 ## Digest
 
-The digest is SHA-256 over the receipt's canonical form, written `sha256:` followed by lower-case hex. The canonical form is the receipt without its top-level `digest` field, serialised as JSON with object keys sorted by code unit at every level, no whitespace, and numbers and strings as `JSON.stringify` writes them, encoded as UTF-8.
+The digest is SHA-256 over the receipt's canonical form, written `sha256:` followed by lower-case hex. The canonical form is the receipt without its top-level `digest` and `signatures` fields, serialised as JSON with object keys sorted by code unit at every level, no whitespace, and numbers and strings as `JSON.stringify` writes them, encoded as UTF-8.
 
 A digest lets a copy of a receipt, such as one quoted in a pull-request comment, be matched against the file it came from. It is not a signature: anyone who edits a receipt can retake its digest.
+
+## Signatures
+
+A signature lets a reader tell who put their name to a receipt. Signing is optional. Signatures were added to this draft after its first release; a verifier older than 0.2.0 rejects a signed receipt as carrying an unknown field.
+
+Each entry in `signatures` has two fields and no others:
+
+| Field | Meaning |
+|---|---|
+| `key` | The signer's Ed25519 public key: `ed25519:` followed by its 32 bytes in unpadded base64url. |
+| `sig` | The signature's 64 bytes in unpadded base64url. |
+
+What is signed is the UTF-8 bytes of the line `run-receipt-signature-v1`, a line feed, and the receipt's digest as written (`sha256:` and the hex). The digest signed is the one worked out from the receipt, not the one it states, so a signature holds only over the receipt as it stands. The leading line keeps a signature made for a receipt from being valid for anything else the same key signs.
+
+Because `signatures` is left out of the canonical form, signing does not change a receipt's digest, and a second party can add its own signature without disturbing the first.
+
+### What a signature means
+
+A signature that holds says that the holder of that key signed exactly this receipt. That is all it says. Three things follow.
+
+- **A key is not a name.** A receipt carries keys and never says whose they are: a signature entry has no room for a name, so a receipt cannot introduce its own signer. The reader decides which keys to trust and what to call them, in a list the reader keeps. A signature from a key the reader has not listed proves that somebody signed, and nothing about who.
+- **A signature is worth what the key's keeping is worth.** A key held by a build server and never shown to anyone supports a strong claim. A key shipped inside an application that runs on its users' machines can be taken out by any of them, and proves only that the receipt came from a copy of that application. Say which kind your key is when you publish it.
+- **A signature does not make a receipt true.** It moves the question from "was this file edited?" to "do I believe this signer's account?". The signer can still be wrong, or lie.
+
+A reader that requires a signature (rule K3) must name the keys it trusts. Requiring a signature from any key at all is meaningless, since anyone can make a key.
 
 ## What a verifier cannot tell you
 
@@ -180,7 +211,7 @@ A digest lets a copy of a receipt, such as one quoted in a pull-request comment,
 - That the seats were the models named.
 - That the receipt belongs to the change it is attached to, beyond the `revision` it names.
 
-Closing those gaps needs a signature from the producer and a way to check the key, which this version leaves out. See the roadmap in README.md.
+A signature from a key you trust narrows the first two to how far you trust the signer. Nothing in a receipt closes them outright.
 
 ## What a receipt must not carry
 

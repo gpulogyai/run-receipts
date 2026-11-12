@@ -1,6 +1,6 @@
 {
   "name": "@letthembuild/run-receipts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A format for recording how well an AI run checked its own work, and a verifier for it.",
   "license": "Apache-2.0",
   "author": "GPULogy AI LLC",
@@ -16,13 +16,17 @@
   "main": "./verify.mjs",
   "exports": {
     ".": "./verify.mjs",
+    "./sign": "./sign.mjs",
     "./schema": "./receipt.schema.json"
   },
   "bin": {
-    "run-receipt-verify": "verify.mjs"
+    "run-receipts": "verify.mjs",
+    "run-receipt-verify": "verify.mjs",
+    "run-receipt-sign": "sign.mjs"
   },
   "files": [
     "verify.mjs",
+    "sign.mjs",
     "receipt.schema.json",
     "SPEC.md",
     "PRODUCERS.md",
@@ -33,7 +37,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node --test verify.test.mjs action.test.mjs produce.test.mjs"
+    "test": "node --test verify.test.mjs sign.test.mjs action.test.mjs produce.test.mjs"
   },
   "keywords": [
     "receipt",

@@ -15,7 +15,7 @@ import { readFileSync, statSync, readdirSync, appendFileSync, realpathSync } fro
 import { join, relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { verifyReceipt } from "./verify.mjs";
+import { verifyReceipt, parseKeys, shortKey } from "./verify.mjs";
 
 /** Hidden first line of the comment, so the next run updates it instead of adding another. */
 export const MARKER = "<!-- run-receipts:report -->";
@@ -85,16 +85,16 @@ export function findReceipts(input, workspace) {
 }
 
 /** Read and verify one file. A file that cannot be read is an invalid receipt, not a crash. */
-export function checkFile({ file, name }) {
+export function checkFile({ file, name }, { trustedKeys = [] } = {}) {
   let receipt;
   try {
-    if (statSync(file).size > MAX_BYTES) return { name, valid: false, errors: ["file: larger than a receipt can be"], warnings: [], receipt: null };
+    if (statSync(file).size > MAX_BYTES) return { name, valid: false, errors: ["file: larger than a receipt can be"], warnings: [], signers: [], receipt: null };
     receipt = JSON.parse(readFileSync(file, "utf8"));
   } catch (e) {
-    return { name, valid: false, errors: [`file: not readable as JSON (${e.name})`], warnings: [], receipt: null };
+    return { name, valid: false, errors: [`file: not readable as JSON (${e.name})`], warnings: [], signers: [], receipt: null };
   }
-  const res = verifyReceipt(receipt);
-  return { name, valid: res.valid, errors: res.errors, warnings: res.warnings, receipt: res.valid ? receipt : null };
+  const res = verifyReceipt(receipt, { trustedKeys });
+  return { name, valid: res.valid, errors: res.errors, warnings: res.warnings, signers: res.signers, receipt: res.valid ? receipt : null };
 }
 
 /* ── The report ──────────────────────────────────────────────────────── */
@@ -144,6 +144,17 @@ function exitCell(c) {
   return `exit ${text(c.exitCode, 8)}`;
 }
 
+/**
+ * Who signed, in a sentence. A name here is the workflow's own name for a key
+ * it listed, never anything the receipt says about itself.
+ */
+function signedLine(signers) {
+  const trusted = signers.filter((s) => s.trusted);
+  if (trusted.length) return `Signed by ${trusted.map((s) => `${s.name ? `${text(s.name, 80)} ` : ""}(${code(shortKey(s.key), 20)})`).join(" and ")}.`;
+  if (signers.length) return `Signed by ${signers.map((s) => code(shortKey(s.key), 20)).join(" and ")}, which this workflow does not list as trusted, so the signature says nothing about who wrote it.`;
+  return "Not signed.";
+}
+
 function receiptSection(res, many) {
   const out = [];
   const heading = many ? "####" : "###";
@@ -186,6 +197,7 @@ function receiptSection(res, many) {
   const from = `${text(r.producer?.name, 60)}${r.producer?.version ? ` ${text(r.producer.version, 30)}` : ""}`;
   const notes = [`From ${code(res.name, 200)}, written by ${from}, run ended ${text(r.endedAt, 30)}.`];
   notes.push(r.digest ? "Unchanged since its digest was taken." : "It carries no digest, so an edit after it was written would not show.");
+  notes.push(signedLine(res.signers ?? []));
   for (const w of res.warnings.slice(0, 5)) notes.push(`Warning: ${text(w, 300)}`);
   out.push(notes.join(" "));
   return out.join("\n");
@@ -218,12 +230,14 @@ export function gradeList(input) {
 }
 
 /** What the job does with these results: 0 to pass, 1 to fail, and why. */
-export function decide(results, { failGrades = new Set(), ifNone = "warn" } = {}) {
+export function decide(results, { failGrades = new Set(), ifNone = "warn", requireSignature = false } = {}) {
   if (!results.length) {
     return { code: ifNone === "error" ? 1 : 0, level: ifNone === "ignore" ? "none" : ifNone === "error" ? "error" : "warning", message: "No run receipt was found at the path given." };
   }
   const bad = results.filter((r) => !r.valid);
   if (bad.length) return { code: 1, level: "error", message: `${count(bad.length, "receipt")} did not verify.` };
+  const unsigned = requireSignature ? results.filter((r) => !(r.signers ?? []).some((s) => s.trusted)) : [];
+  if (unsigned.length) return { code: 1, level: "error", message: `${count(unsigned.length, "receipt is", "receipts are")} not signed by a trusted key, which this workflow requires.` };
   const failing = results.filter((r) => failGrades.has(r.receipt.grade));
   if (failing.length) return { code: 1, level: "error", message: `${count(failing.length, "receipt")} graded ${[...new Set(failing.map((r) => r.receipt.grade))].join(", ")}, which this workflow does not accept.` };
   return { code: 0, level: "none", message: "" };
@@ -259,6 +273,9 @@ export async function postComment({ api, repo, number, token, body, fetchImpl = 
 
 /* ── Running as the action ───────────────────────────────────────────── */
 
+/** A mistake in the workflow's own inputs: ours to word, so safe to show. */
+class SetupError extends Error {}
+
 /** One line of an output file, in the form that cannot be broken out of. */
 function outputLine(name, value) {
   const fence = `rr_${randomUUID()}`;
@@ -277,11 +294,15 @@ export async function main(env = process.env, { log = console.log, fetchImpl = f
   try {
     const workspace = env.GITHUB_WORKSPACE || process.cwd();
     const { files, problems } = findReceipts(env.RR_PATH, workspace);
-    const results = files.map(checkFile);
+    const trusted = parseKeys(env.RR_TRUSTED_KEYS);
+    for (const p of trusted.problems) problems.push(`trusted-keys, ${p}`);
+    const requireSignature = env.RR_REQUIRE_SIGNATURE === "true";
+    if (requireSignature && !trusted.keys.length) throw new SetupError("require-signature needs trusted-keys: a signature only means something from a key this workflow trusts.");
+    const results = files.map((f) => checkFile(f, { trustedKeys: trusted.keys }));
     const { grades, unknown } = gradeList(env.RR_FAIL_ON_GRADE);
     for (const w of unknown) problems.push(`fail-on-grade names "${w}", which is not a grade`);
     const ifNone = ["error", "warn", "ignore"].includes(env.RR_IF_NO_RECEIPT) ? env.RR_IF_NO_RECEIPT : "warn";
-    const verdict = decide(results, { failGrades: grades, ifNone });
+    const verdict = decide(results, { failGrades: grades, ifNone, requireSignature });
     exit = verdict.code;
     annotate(verdict.level, verdict.message);
     for (const p of problems) annotate("warning", p);
@@ -301,7 +322,8 @@ export async function main(env = process.env, { log = console.log, fetchImpl = f
         outputLine("count", results.length)
         + outputLine("valid", results.length > 0 && results.every((r) => r.valid))
         + outputLine("grade", results.length === 1 && first ? first.receipt.grade : "")
-        + outputLine("grades", results.filter((r) => r.valid).map((r) => r.receipt.grade).join(",")));
+        + outputLine("grades", results.filter((r) => r.valid).map((r) => r.receipt.grade).join(","))
+        + outputLine("signed", results.length > 0 && results.every((r) => r.valid && r.signers.some((s) => s.trusted))));
     }
 
     if (body && env.RR_COMMENT !== "false") {
@@ -319,7 +341,7 @@ export async function main(env = process.env, { log = console.log, fetchImpl = f
     }
   } catch (e) {
     exit = 1;
-    annotate("error", `The action failed: ${e.name}`);
+    annotate("error", e instanceof SetupError ? e.message : `The action failed: ${e.name}`);
     log(String(e?.stack ?? e));
   } finally {
     log(`::${guard}::`);

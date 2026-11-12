@@ -108,11 +108,12 @@ Also: make `id` opaque. A random identifier is right; your internal conversation
 
 The masking in the example is a starting point. You know what your users' secrets look like better than a generic pattern does.
 
-## Digest, then verify, then write
+## Digest, verify, sign if you can, then write
 
 1. Build the whole receipt without `digest`.
 2. Take the digest: SHA-256 over the receipt serialised as JSON with object keys sorted at every level and no whitespace, written as `sha256:` and lower-case hex. Add it as `digest`.
 3. Verify the result. If it does not verify, do not write it: fix the producer.
+4. Sign it, if your tool has a key worth signing with. See "Signing" below.
 
 In JavaScript, with the package:
 
@@ -131,6 +132,28 @@ npx @letthembuild/run-receipts receipt.json
 ```
 
 Number formatting is where digests written in other languages go wrong: the canonical form writes numbers as JavaScript's `JSON.stringify` does, so `0.10` is `0.1` and `2.0` is `2`. Test your digest against the two receipts in [examples/](examples), which carry theirs.
+
+## Signing
+
+Signing is optional, and an unsigned receipt is a complete receipt. Sign when a reader needs to know that a receipt came from you and was not rewritten on the way.
+
+```js
+import { signReceipt } from "@letthembuild/run-receipts/sign";
+
+const signed = signReceipt(receipt, signingKey); // { key, secret }, as `sign.mjs keygen` writes it
+```
+
+In another language: sign the UTF-8 bytes of `run-receipt-signature-v1`, a line feed, and the digest string, with Ed25519, and add `{ "key": "ed25519:<public key, base64url>", "sig": "<signature, base64url>" }` to `signatures`. Both are unpadded.
+
+Before you add signing, decide where the key lives, because that decides what your signature is worth:
+
+| Where the key is | What a signature from it shows |
+|---|---|
+| On a build server or service you run, never given out | The receipt came from your service. The strongest claim you can make. |
+| Made on each user's machine, one key per installation | The receipt came from that installation and was not edited since. The user publishes their own key to whoever needs to trust it. |
+| One key built into the application you ship | Only that the receipt came from some copy of your application. Anyone with the application can extract the key, so do not present this as your signature. |
+
+Publish your public key somewhere readers already trust, such as your documentation over HTTPS, and say which of the three it is. Never put a name in a receipt to say who signed: the format has no field for it, on purpose.
 
 ## Where the file goes
 
@@ -156,6 +179,7 @@ Write a receipt for every run, including the ones that went badly. A tool that o
 | C2 | A check exited 0 with a state other than `checked`. |
 | C3 | `blocked` without `missingSetup`, or `missingSetup` on a check that is not blocked. |
 | D1 | The receipt was changed after its digest was taken, or the canonical form is not quite right. |
+| K1 | The receipt was changed after it was signed, or the signature was made over something other than the context line and the digest. |
 
 ## Before you ship
 
