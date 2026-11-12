@@ -40,6 +40,14 @@ The full versions are in [examples/](examples). A receipt holds figures, names a
 
 You need Node 18 or later. Nothing else.
 
+With npm, no clone is needed:
+
+```bash
+npx @letthembuild/run-receipts receipt.json
+```
+
+Or from a clone of this repository:
+
 ```bash
 git clone <this repository> run-receipts
 ```

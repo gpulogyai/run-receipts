@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "A format for recording how well an AI run checked its own work, and a verifier for it.",
   "license": "Apache-2.0",
+  "author": "GPULogy AI LLC",
+  "homepage": "https://github.com/gpulogyai/run-receipts#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gpulogyai/run-receipts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gpulogyai/run-receipts/issues"
+  },
   "type": "module",
   "main": "./verify.mjs",
   "exports": {
@@ -12,10 +21,28 @@
   "bin": {
     "run-receipt-verify": "./verify.mjs"
   },
-  "files": ["verify.mjs", "receipt.schema.json", "SPEC.md", "examples", "NOTICE"],
-  "engines": { "node": ">=18" },
+  "files": [
+    "verify.mjs",
+    "receipt.schema.json",
+    "SPEC.md",
+    "examples",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "test": "node --test verify.test.mjs"
   },
-  "keywords": ["receipt", "verification", "ai", "agents", "code-review", "json-schema"]
+  "keywords": [
+    "receipt",
+    "verification",
+    "ai",
+    "agents",
+    "code-review",
+    "json-schema"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
 }
