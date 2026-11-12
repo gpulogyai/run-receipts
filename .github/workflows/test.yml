@@ -23,3 +23,45 @@ jobs:
       - run: npm test
       - run: node verify.mjs examples/agreed-verified.json
       - run: node verify.mjs examples/not-unanimous-failing.json
+
+  action:
+    # The action, run the way a workflow would run it, on this repository's
+    # own examples. No comment is posted: the examples are not this change's
+    # receipt.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: one
+        uses: ./
+        with:
+          path: examples/agreed-verified.json
+          comment: "false"
+          fail-on-grade: failed, unverified
+      - id: both
+        uses: ./
+        with:
+          path: examples
+          comment: "false"
+      - name: The outputs say what the examples are
+        env:
+          ONE_GRADE: ${{ steps.one.outputs.grade }}
+          ONE_VALID: ${{ steps.one.outputs.valid }}
+          BOTH_COUNT: ${{ steps.both.outputs.count }}
+          BOTH_GRADES: ${{ steps.both.outputs.grades }}
+        run: |
+          test "$ONE_GRADE" = "verified"
+          test "$ONE_VALID" = "true"
+          test "$BOTH_COUNT" = "2"
+          test "$BOTH_GRADES" = "verified,failed"
+      - id: strict
+        name: A failed grade fails the job when the workflow asks
+        continue-on-error: true
+        uses: ./
+        with:
+          path: examples/not-unanimous-failing.json
+          comment: "false"
+          fail-on-grade: failed
+      - name: And it did fail
+        env:
+          OUTCOME: ${{ steps.strict.outcome }}
+        run: test "$OUTCOME" = "failure"
