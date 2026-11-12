@@ -20,7 +20,7 @@
     { "by": "Gemini", "purpose": "Ask the staging health endpoint", "command": "curl -fsS https://staging.example.com/healthz", "exitCode": 0, "result": "ok", "revision": null, "where": "local", "deployed": true, "missingSetup": null, "state": "checked" }
   ],
   "totals": { "reviewers": 2, "verifiers": 2, "notVisible": 0, "contradicted": 0, "ran": 5, "passed": 4, "failed": 1, "failingNow": 0, "resolved": 1, "filesChanged": 3 },
-  "grade": "verified",
+  "grade": "failed",
   "gaps": ["Behaviour under production load"],
   "digest": "sha256:12b44c77459b21d7d99682b9a75a620d7ee5aae1ef0f581ce5e0e5df677334ab"
 }
