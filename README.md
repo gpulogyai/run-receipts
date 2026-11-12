@@ -9,6 +9,7 @@ This repository holds:
 - **[SPEC.md](SPEC.md)**: the format, version 0.1 (draft), and the rules a valid receipt obeys.
 - **[receipt.schema.json](receipt.schema.json)**: the JSON Schema.
 - **[verify.mjs](verify.mjs)**: a verifier with no dependencies.
+- **[PRODUCERS.md](PRODUCERS.md)**: how to write receipts from your own tool, with a worked example.
 - **[action.yml](action.yml)**: a GitHub Action that verifies the receipts a pull request carries and reports them.
 - **[examples/](examples)**: two receipts to read and test against.
 
@@ -143,7 +144,6 @@ Verifying does **not** prove that the commands were really run or that they exit
 Not in 0.1:
 
 - **Signing**, so a reader can tell who produced a receipt.
-- **A guide for producers**: how to write a receipt from your own tool.
 
 ## Run the tests
 
