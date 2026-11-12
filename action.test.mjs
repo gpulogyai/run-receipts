@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { verifyReceipt, digestOf } from "./verify.mjs";
 import { MARKER, MAX_RECEIPTS, text, code, findReceipts, checkFile, render, gradeList, decide, postComment, main, GRADE_WORDS } from "./action.mjs";
+import { generateKey, signReceipt } from "./sign.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const example = (name) => JSON.parse(readFileSync(join(here, "examples", name), "utf8"));
@@ -267,7 +268,7 @@ async function run(files, env = {}, answers = []) {
 test("main: a valid receipt passes, is summarised, sets outputs and is posted", async () => {
   const r = await run({ "receipts/run.json": good() }, { RR_PATH: "receipts" }, [{ status: 200, json: [] }, { status: 201 }]);
   assert.equal(r.code, 0);
-  assert.deepEqual(r.outputs, { count: "1", valid: "true", grade: "verified", grades: "verified" });
+  assert.deepEqual(r.outputs, { count: "1", valid: "true", grade: "verified", grades: "verified", signed: "false" });
   assert.match(r.summary, /### Run receipt: Verified/);
   assert.equal(r.calls[1].method, "POST");
   assert.equal(r.calls[1].body.body + "\n", r.summary);
@@ -280,7 +281,7 @@ test("main: an edited receipt fails the job and names the rules", async () => {
   const edited = good(); edited.grade = "failed";
   const r = await run({ "run.json": edited }, { RR_PATH: "run.json", RR_COMMENT: "false" });
   assert.equal(r.code, 1);
-  assert.deepEqual(r.outputs, { count: "1", valid: "false", grade: "", grades: "" });
+  assert.deepEqual(r.outputs, { count: "1", valid: "false", grade: "", grades: "", signed: "false" });
   assert.ok(r.lines.some((l) => /^ {2}error {4}G1: /.test(l)));
   assert.ok(r.lines.includes("::error title=Run receipt::1 receipt did not verify."));
   assert.equal(r.calls.length, 0, "comment: false posts nothing");
@@ -300,7 +301,7 @@ test("main: a failed grade fails the job only when asked to", async () => {
 test("main: no receipt warns by default, and nothing is posted or summarised", async () => {
   const quiet = await run({}, { RR_PATH: "receipts" });
   assert.equal(quiet.code, 0);
-  assert.deepEqual(quiet.outputs, { count: "0", valid: "false", grade: "", grades: "" });
+  assert.deepEqual(quiet.outputs, { count: "0", valid: "false", grade: "", grades: "", signed: "false" });
   assert.equal(quiet.summary, "");
   assert.equal(quiet.calls.length, 0);
   assert.ok(quiet.lines.includes("::warning title=Run receipt::No run receipt was found at the path given."));
@@ -343,4 +344,66 @@ test("main: each run keeps its own guard word and output fences", async () => {
   const a = await run({ "run.json": good() }, { RR_PATH: "run.json", RR_COMMENT: "false" });
   const b = await run({ "run.json": good() }, { RR_PATH: "run.json", RR_COMMENT: "false" });
   assert.notEqual(a.lines[0], b.lines[0]);
+});
+
+/* ── Signatures ──────────────────────────────────────────────────────── */
+
+const signer = generateKey();
+const stranger = generateKey();
+const signedGood = () => signReceipt(good(), signer);
+
+test("render: says who signed, in the workflow's words, or that nobody it trusts did", () => {
+  const dir = workspace({ "s.json": signedGood(), "u.json": good() });
+  const at = (n, keys) => checkFile({ file: join(dir, n), name: n }, { trustedKeys: keys });
+  const listed = [{ key: signer.key, name: "Release <b>builds</b> @team" }];
+  const named = render([at("s.json", listed)]);
+  assert.match(named, /Signed by Release &#60;b&#62;builds&#60;&#47;b&#62; &#64;&#8203;team \(<code>ed25519&#58;/);
+  assert.ok(!named.includes(signer.key), "the report shows enough of a key to tell two apart, not all of it");
+  assert.match(render([at("s.json", [{ key: stranger.key, name: "Somebody else" }])]), /which this workflow does not list as trusted/);
+  assert.match(render([at("s.json", [])]), /which this workflow does not list as trusted/);
+  assert.match(render([at("u.json", listed)]), /Not signed\./);
+});
+
+test("decide: a required signature must come from a listed key", () => {
+  const dir = workspace({ "s.json": signedGood(), "u.json": good() });
+  const at = (n, keys) => checkFile({ file: join(dir, n), name: n }, { trustedKeys: keys });
+  const listed = [{ key: signer.key, name: "" }];
+  assert.equal(decide([at("s.json", listed)], { requireSignature: true }).code, 0);
+  assert.equal(decide([at("s.json", [{ key: stranger.key, name: "" }])], { requireSignature: true }).code, 1);
+  const mixed = decide([at("s.json", listed), at("u.json", listed)], { requireSignature: true });
+  assert.equal(mixed.code, 1);
+  assert.match(mixed.message, /1 receipt is not signed by a trusted key/);
+  assert.equal(decide([at("u.json", listed)]).code, 0, "unsigned is fine unless the workflow requires otherwise");
+});
+
+test("main: trusted keys come from the workflow, and a required signature is enforced", async () => {
+  const files = { "s.json": signedGood() };
+  const keys = `# release\n${signer.key} Release builds\n`;
+  const ok = await run(files, { RR_PATH: "s.json", RR_COMMENT: "false", RR_TRUSTED_KEYS: keys, RR_REQUIRE_SIGNATURE: "true" });
+  assert.equal(ok.code, 0);
+  assert.equal(ok.outputs.signed, "true");
+  assert.match(ok.summary, /Signed by Release builds/);
+  const wrong = await run(files, { RR_PATH: "s.json", RR_COMMENT: "false", RR_TRUSTED_KEYS: `${stranger.key} Other`, RR_REQUIRE_SIGNATURE: "true" });
+  assert.equal(wrong.code, 1);
+  assert.equal(wrong.outputs.signed, "false");
+  assert.ok(wrong.lines.includes("::error title=Run receipt::1 receipt is not signed by a trusted key, which this workflow requires."));
+  const unsigned = await run({ "u.json": good() }, { RR_PATH: "u.json", RR_COMMENT: "false", RR_TRUSTED_KEYS: keys, RR_REQUIRE_SIGNATURE: "true" });
+  assert.equal(unsigned.code, 1);
+});
+
+test("main: requiring a signature with no keys to trust is a mistake in the workflow, said plainly", async () => {
+  const r = await run({ "s.json": signedGood() }, { RR_PATH: "s.json", RR_COMMENT: "false", RR_REQUIRE_SIGNATURE: "true" });
+  assert.equal(r.code, 1);
+  assert.ok(r.lines.some((l) => l.startsWith("::error title=Run receipt::require-signature needs trusted-keys")));
+  const typo = await run({ "s.json": signedGood() }, { RR_PATH: "s.json", RR_COMMENT: "false", RR_TRUSTED_KEYS: "ed25519:short Oops" });
+  assert.equal(typo.code, 0);
+  assert.ok(typo.lines.some((l) => l.startsWith("::warning title=Run receipt::trusted-keys, line 1: not a key")));
+});
+
+test("main: a signed receipt edited afterwards fails, whoever signed it", async () => {
+  const edited = signedGood(); edited.gaps = [];
+  const r = await run({ "s.json": edited }, { RR_PATH: "s.json", RR_COMMENT: "false", RR_TRUSTED_KEYS: signer.key });
+  assert.equal(r.code, 1);
+  assert.ok(r.lines.some((l) => /^ {2}error {4}K1: /.test(l)));
+  assert.equal(r.outputs.signed, "false");
 });

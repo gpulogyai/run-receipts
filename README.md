@@ -9,6 +9,7 @@ This repository holds:
 - **[SPEC.md](SPEC.md)**: the format, version 0.1 (draft), and the rules a valid receipt obeys.
 - **[receipt.schema.json](receipt.schema.json)**: the JSON Schema.
 - **[verify.mjs](verify.mjs)**: a verifier with no dependencies.
+- **[sign.mjs](sign.mjs)**: makes a signing key and signs a receipt with it.
 - **[PRODUCERS.md](PRODUCERS.md)**: how to write receipts from your own tool, with a worked example.
 - **[action.yml](action.yml)**: a GitHub Action that verifies the receipts a pull request carries and reports them.
 - **[examples/](examples)**: two receipts to read and test against.
@@ -77,6 +78,8 @@ INVALID  edited.json
 | `verify.mjs <file>` | Check a receipt. Exits 0 when valid, 1 when invalid, 2 when the file cannot be read. |
 | `verify.mjs --json <file>` | The same, with the result as JSON. |
 | `verify.mjs --digest <file>` | Print the digest the receipt should carry. |
+| `verify.mjs --keys <list> <file>` | Also say whether each signature is from a key on your list. |
+| `verify.mjs --keys <list> --require-signature <file>` | Not valid unless a key on your list signed it. |
 
 The verifier is also a module:
 
@@ -85,6 +88,45 @@ import { verifyReceipt } from "./verify.mjs";
 
 const { valid, errors, warnings } = verifyReceipt(receipt);
 ```
+
+## Sign a receipt, and check who signed
+
+A digest shows that a receipt was not edited by accident. Anyone who edits one on purpose can retake the digest. A signature closes that: it shows that the holder of a particular key signed exactly this receipt.
+
+Make a key once. The file it writes is the signing key; keep it out of your repository. The line it prints is the public key, which is what you give to readers:
+
+```bash
+node sign.mjs keygen signing-key.json
+```
+
+```
+ed25519:Qm3v...
+```
+
+Sign a receipt where it is:
+
+```bash
+node sign.mjs sign --key signing-key.json --write receipt.json
+```
+
+A reader keeps a list of the keys they trust, one to a line, each with their own name for it:
+
+```
+ed25519:Qm3v... Release builds
+```
+
+```bash
+node verify.mjs --keys trusted-keys.txt --require-signature receipt.json
+```
+
+```
+VALID    receipt.json
+  signed   Release builds (ed25519:Qm3v...)
+```
+
+On a build server, put the contents of the key file in a secret and pass it as `RUN_RECEIPT_SIGNING_KEY` instead of `--key`.
+
+A receipt carries keys, never names: the name shown is always the reader's own. A signature from a key that is not on your list tells you somebody signed, and nothing about who. And a key is only as good as its keeping. One that lives on a build server supports a strong claim; one shipped inside an app on its users' machines can be extracted by any of them. [SPEC.md](SPEC.md#signatures) says exactly what a signature does and does not mean.
 
 ## Verify receipts on pull requests
 
@@ -118,6 +160,8 @@ The job fails when a receipt does not verify. A receipt that verifies and is gra
 | `comment` | `true` | Post the report on the pull request. One comment, updated on each run. |
 | `fail-on-grade` | none | Grades that fail the job, separated by commas: `failed`, `unverified`, `not-visible`, `reviewed`, `partial`, `verified`. |
 | `if-no-receipt` | `warn` | What to do when the path holds no receipt: `error`, `warn` or `ignore`. |
+| `trusted-keys` | none | The keys this workflow trusts to sign receipts, one to a line, each followed by your name for it. |
+| `require-signature` | `false` | Fail the job unless every receipt is signed by a trusted key. |
 | `token` | the job's token | The token the comment is posted with. |
 
 | Output | What it holds |
@@ -126,6 +170,18 @@ The job fails when a receipt does not verify. A receipt that verifies and is gra
 | `valid` | `true` when at least one was checked and every one verified. |
 | `grade` | The grade, when exactly one receipt was checked and it verified. |
 | `grades` | The grades of the receipts that verified, separated by commas. |
+| `signed` | `true` when every receipt verified and was signed by a trusted key. |
+
+To accept only receipts signed by keys you trust, list the keys in the workflow or in a repository variable. Do not read them from a file in the pull request: the pull request could change it.
+
+```yaml
+      - uses: gpulogyai/run-receipts@v0
+        with:
+          path: receipts
+          require-signature: true
+          trusted-keys: |
+            ed25519:Qm3v... Release builds
+```
 
 Three things to know:
 
@@ -135,15 +191,16 @@ Three things to know:
 
 ## What verifying proves, and what it does not
 
-A valid receipt is well-formed, consistent with itself, and unchanged since its digest was taken. Its grade follows from its totals, its verdict follows from where each reviewer ended, and each check's state matches its exit code.
+A valid receipt is well-formed, consistent with itself, and unchanged since its digest was taken. Its grade follows from its totals, its verdict follows from where each reviewer ended, and each check's state matches its exit code. When it is signed, verifying also says which keys signed it and whether they are keys you listed.
 
-Verifying does **not** prove that the commands were really run or that they exited as stated. A receipt is the producer's own account. Trusting a receipt you did not produce needs a signature, which version 0.1 leaves out.
+Verifying does **not** prove that the commands were really run or that they exited as stated. A receipt is the producer's own account. A signature from a key you trust tells you whose account it is, not that the account is true.
 
 ## Roadmap
 
-Not in 0.1:
+Not yet:
 
-- **Signing**, so a reader can tell who produced a receipt.
+- **A published list of well-known producers' keys**, so a reader does not have to collect them by hand.
+- **Signing by identity instead of a kept key**, for build servers that can prove who they are.
 
 ## Run the tests
 

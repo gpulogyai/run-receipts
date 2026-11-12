@@ -65,3 +65,36 @@ jobs:
         env:
           OUTCOME: ${{ steps.strict.outcome }}
         run: test "$OUTCOME" = "failure"
+      - name: Make a key and sign an example with it
+        id: key
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys" signed
+          echo "public=$(node sign.mjs keygen "$RUNNER_TEMP/keys/signing-key.json")" >> "$GITHUB_OUTPUT"
+          node sign.mjs sign --key "$RUNNER_TEMP/keys/signing-key.json" examples/agreed-verified.json > signed/receipt.json
+      - id: signed
+        name: A receipt signed by a listed key is accepted
+        uses: ./
+        with:
+          path: signed
+          comment: "false"
+          require-signature: true
+          trusted-keys: |
+            ${{ steps.key.outputs.public }} This run's key
+      - name: And it says so
+        env:
+          SIGNED: ${{ steps.signed.outputs.signed }}
+        run: test "$SIGNED" = "true"
+      - id: unsigned
+        name: An unsigned receipt is refused when a signature is required
+        continue-on-error: true
+        uses: ./
+        with:
+          path: examples/agreed-verified.json
+          comment: "false"
+          require-signature: true
+          trusted-keys: |
+            ${{ steps.key.outputs.public }} This run's key
+      - name: And it was refused
+        env:
+          OUTCOME: ${{ steps.unsigned.outcome }}
+        run: test "$OUTCOME" = "failure"

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run-receipt verifier, v0.1.
+ * Run-receipt verifier, for format 0.1.
  *
  * Answers one question about a receipt file: does it hold together? First
  * against the schema (shape, bounds), then against itself (the rules in
@@ -9,12 +9,13 @@
  *
  * It does not prove the run happened. A receipt is the producer's account;
  * this proves the account is well-formed, internally consistent and, when it
- * carries a digest, unaltered since the digest was taken.
+ * carries a digest, unaltered since the digest was taken. When it is signed,
+ * it also says which keys signed it, and whether you listed them as trusted.
  *
  * No dependencies: Node 18 or later and this file, with the schema beside it.
  */
 import { readFileSync, realpathSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { createHash, createPublicKey, verify as verifyBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const SCHEMA_URL = new URL("./receipt.schema.json", import.meta.url);
@@ -73,7 +74,7 @@ export function validateSchema(value, schema, root = schema, path = "$") {
 
 /* ── Digest ──────────────────────────────────────────────────────────── */
 
-/** The receipt as bytes to hash: keys sorted, no whitespace, `digest` left out. */
+/** The receipt as bytes to hash: keys sorted, no whitespace, `digest` and `signatures` left out. */
 export function canonical(value) {
   if (value === null || typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -81,8 +82,69 @@ export function canonical(value) {
 }
 
 export function digestOf(receipt) {
-  const { digest: _left_out, ...rest } = receipt;
+  const { digest: _left_out, signatures: _nor_these, ...rest } = receipt;
   return `sha256:${createHash("sha256").update(canonical(rest), "utf8").digest("hex")}`;
+}
+
+/* ── Signatures ──────────────────────────────────────────────────────── */
+
+/** What a signature is made over: these words, then the receipt's digest. The words keep a signature made for a receipt from being one for anything else. */
+export const SIGNATURE_CONTEXT = "run-receipt-signature-v1\n";
+export const signedBytes = (digest) => Buffer.from(SIGNATURE_CONTEXT + digest, "utf8");
+
+const KEY_FORM = /^ed25519:([A-Za-z0-9_-]{43})$/;
+
+/** A public key as Node holds it, from its written form, or null when it is not one. */
+export function publicKeyOf(key) {
+  const m = KEY_FORM.exec(String(key ?? ""));
+  if (!m) return null;
+  try { return createPublicKey({ key: { kty: "OKP", crv: "Ed25519", x: m[1] }, format: "jwk" }); }
+  catch { return null; }
+}
+
+/** True when `signature` is its key's signature over this receipt as it stands. */
+export function signatureHolds(receipt, signature) {
+  const key = publicKeyOf(signature?.key);
+  if (!key || typeof signature.sig !== "string") return false;
+  try { return verifyBytes(null, signedBytes(digestOf(receipt)), key, Buffer.from(signature.sig, "base64url")); }
+  catch { return false; }
+}
+
+/**
+ * A list of keys somebody trusts, from text: either JSON,
+ * { "keys": [{ "key": "ed25519:…", "name": "…" }] }, or one key to a line with
+ * an optional name after it. Lines starting with # are comments. The names are
+ * the reader's own words for each key; a receipt never supplies them.
+ */
+export function parseKeys(text) {
+  const src = String(text ?? "").trim();
+  const keys = [], problems = [];
+  const add = (key, name, where) => {
+    if (!publicKeyOf(key)) problems.push(`${where}: not a key`);
+    else if (!keys.some((k) => k.key === key)) keys.push({ key, name: String(name ?? "").trim().slice(0, 80) });
+  };
+  if (src.startsWith("{")) {
+    let doc;
+    try { doc = JSON.parse(src); } catch { return { keys, problems: ["the key list is not readable as JSON"] }; }
+    if (!Array.isArray(doc?.keys)) return { keys, problems: ["the key list has no keys"] };
+    doc.keys.forEach((k, i) => add(k?.key, k?.name, `keys[${i}]`));
+  } else {
+    src.split(/\r?\n/).forEach((raw, i) => {
+      const line = raw.trim();
+      if (!line || line.startsWith("#")) return;
+      const [key, ...name] = line.split(/\s+/);
+      add(key, name.join(" "), `line ${i + 1}`);
+    });
+  }
+  return { keys, problems };
+}
+
+/** Who signed a receipt: each key whose signature holds, with the reader's name for it when they listed it. */
+export function signersOf(receipt, trustedKeys = []) {
+  return (receipt.signatures ?? []).filter((s) => signatureHolds(receipt, s)).map((s) => {
+    const known = trustedKeys.find((k) => k.key === s.key);
+    return { key: s.key, trusted: Boolean(known), name: known?.name ?? "" };
+  });
 }
 
 /* ── Consistency: the rules of SPEC.md, by number ────────────────────── */
@@ -179,15 +241,30 @@ export function checkConsistency(r) {
   if (r.digest && r.digest !== digestOf(r)) err("D1", "digest does not match the receipt's contents");
   if (!r.digest) warnings.push("D2: no digest, so a copy cannot be told from an edited one");
 
+  // K — signatures.
+  const signed = r.signatures ?? [];
+  if (new Set(signed.map((s) => s.key)).size !== signed.length) err("K2", "one key signed twice");
+  signed.forEach((s, i) => { if (!signatureHolds(r, s)) err("K1", `signatures[${i}]: is not that key's signature over this receipt`); });
+
   return { errors, warnings };
 }
 
 /** Schema first; the consistency rules only run on a receipt with the right shape. */
-export function verifyReceipt(receipt) {
+/**
+ * `signers` lists the keys whose signatures hold, and is empty for a receipt
+ * that is not valid. Pass `trustedKeys` (as parseKeys returns them) to have
+ * each marked as one you listed. With `requireSignature`, a receipt no listed
+ * key has signed is not valid.
+ */
+export function verifyReceipt(receipt, { trustedKeys = [], requireSignature = false } = {}) {
   const schemaErrors = validateSchema(receipt, loadSchema());
-  if (schemaErrors.length) return { valid: false, errors: schemaErrors.map((e) => `schema: ${e}`), warnings: [] };
+  if (schemaErrors.length) return { valid: false, errors: schemaErrors.map((e) => `schema: ${e}`), warnings: [], signers: [] };
   const { errors, warnings } = checkConsistency(receipt);
-  return { valid: errors.length === 0, errors, warnings };
+  const signers = errors.length ? [] : signersOf(receipt, trustedKeys);
+  if (requireSignature && !errors.length && !signers.some((s) => s.trusted)) {
+    errors.push(signers.length ? "K3: signed, but by no key on the trusted list" : "K3: not signed, and a signature from a trusted key is required");
+  }
+  return { valid: errors.length === 0, errors, warnings, signers: errors.length ? [] : signers };
 }
 
 /* ── Command line ────────────────────────────────────────────────────── */
@@ -195,12 +272,33 @@ export function verifyReceipt(receipt) {
 const USAGE = `Usage:
   verify.mjs <receipt.json>            check a receipt; exit 0 valid, 1 invalid
   verify.mjs --json <receipt.json>     the same, as JSON
-  verify.mjs --digest <receipt.json>   print the digest the receipt should carry`;
+  verify.mjs --digest <receipt.json>   print the digest the receipt should carry
+
+Signatures:
+  --keys <file>          the keys you trust: JSON, or one "ed25519:… name" to a line
+  --require-signature    not valid unless a key from --keys signed it`;
+
+/** A key as people read it: enough of it to tell two apart. */
+export const shortKey = (key) => `${String(key).slice(0, 16)}…`;
 
 function main(argv) {
-  const flags = argv.filter((a) => a.startsWith("--"));
-  const files = argv.filter((a) => !a.startsWith("--"));
-  if (files.length !== 1 || flags.some((f) => !["--json", "--digest"].includes(f))) { console.error(USAGE); return 2; }
+  const args = [...argv];
+  let keysFile = null;
+  const at = args.indexOf("--keys");
+  if (at !== -1) { keysFile = args[at + 1] ?? null; args.splice(at, 2); if (!keysFile || keysFile.startsWith("--")) { console.error(USAGE); return 2; } }
+  const flags = args.filter((a) => a.startsWith("--"));
+  const files = args.filter((a) => !a.startsWith("--"));
+  if (files.length !== 1 || flags.some((f) => !["--json", "--digest", "--require-signature"].includes(f))) { console.error(USAGE); return 2; }
+  const requireSignature = flags.includes("--require-signature");
+  let trustedKeys = [];
+  if (keysFile) {
+    let parsed;
+    try { parsed = parseKeys(readFileSync(keysFile, "utf8")); }
+    catch (e) { console.error(`Cannot read ${keysFile}: ${e.message}`); return 2; }
+    if (parsed.problems.length) { console.error(`${keysFile}: ${parsed.problems.join("; ")}`); return 2; }
+    trustedKeys = parsed.keys;
+  }
+  if (requireSignature && !trustedKeys.length) { console.error("--require-signature needs --keys: a signature only means something from a key you trust."); return 2; }
   let receipt;
   try { receipt = JSON.parse(readFileSync(files[0], "utf8")); }
   catch (e) { console.error(`Cannot read ${files[0]}: ${e.message}`); return 2; }
@@ -209,12 +307,13 @@ function main(argv) {
     console.log(digestOf(receipt));
     return 0;
   }
-  const result = verifyReceipt(receipt);
+  const result = verifyReceipt(receipt, { trustedKeys, requireSignature });
   if (flags.includes("--json")) console.log(JSON.stringify(result, null, 2));
   else {
     console.log(result.valid ? `VALID    ${files[0]}` : `INVALID  ${files[0]}`);
     for (const e of result.errors) console.log(`  error    ${e}`);
     for (const w of result.warnings) console.log(`  warning  ${w}`);
+    for (const s of result.signers) console.log(s.trusted ? `  signed   ${s.name || "a trusted key"} (${shortKey(s.key)})` : `  signed   ${shortKey(s.key)}, which ${keysFile ? "is not on your list" : "nothing here vouches for (pass --keys)"}`);
   }
   return result.valid ? 0 : 1;
 }

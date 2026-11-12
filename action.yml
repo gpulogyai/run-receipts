@@ -25,6 +25,16 @@ inputs:
   if-no-receipt:
     description: What to do when the path holds no receipt - error, warn or ignore.
     default: warn
+  trusted-keys:
+    description: >-
+      The keys this workflow trusts to sign receipts, one to a line, each
+      followed by your own name for it: "ed25519:... Release builds". Set it
+      here or from a repository variable, never from a file in the pull
+      request.
+    default: ""
+  require-signature:
+    description: Fail the job unless every receipt is signed by a trusted key.
+    default: "false"
   token:
     description: The token the report is posted with.
     default: ${{ github.token }}
@@ -42,6 +52,9 @@ outputs:
   grades:
     description: The grades of the receipts that verified, separated by commas.
     value: ${{ steps.verify.outputs.grades }}
+  signed:
+    description: "true when every receipt verified and was signed by a trusted key."
+    value: ${{ steps.verify.outputs.signed }}
 
 runs:
   using: composite
@@ -54,4 +67,6 @@ runs:
         RR_COMMENT: ${{ inputs.comment }}
         RR_FAIL_ON_GRADE: ${{ inputs.fail-on-grade }}
         RR_IF_NO_RECEIPT: ${{ inputs.if-no-receipt }}
+        RR_TRUSTED_KEYS: ${{ inputs.trusted-keys }}
+        RR_REQUIRE_SIGNATURE: ${{ inputs.require-signature }}
         RR_TOKEN: ${{ inputs.token }}

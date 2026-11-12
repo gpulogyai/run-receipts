@@ -30,9 +30,19 @@
     "totals": { "$ref": "#/$defs/totals" },
     "grade": { "enum": ["failed", "verified", "partial", "not-visible", "reviewed", "unverified"] },
     "gaps": { "type": "array", "maxItems": 50, "items": { "type": "string", "minLength": 1, "maxLength": 200 } },
-    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "signatures": { "type": "array", "minItems": 1, "maxItems": 8, "items": { "$ref": "#/$defs/signature" }, "description": "Signatures over the digest. Left out of the digest themselves." }
   },
   "$defs": {
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "sig"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^ed25519:[A-Za-z0-9_-]{43}$", "description": "The signer's Ed25519 public key: its 32 bytes in base64url." },
+        "sig": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$", "description": "The signature's 64 bytes in base64url." }
+      }
+    },
     "stance": { "enum": ["agreed", "objected", "silent", "unavailable"] },
     "seat": {
       "type": "object",
