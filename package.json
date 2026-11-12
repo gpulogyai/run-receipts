@@ -19,7 +19,7 @@
     "./schema": "./receipt.schema.json"
   },
   "bin": {
-    "run-receipt-verify": "./verify.mjs"
+    "run-receipt-verify": "verify.mjs"
   },
   "files": [
     "verify.mjs",
