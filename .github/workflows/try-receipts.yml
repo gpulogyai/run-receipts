@@ -1,0 +1,17 @@
+name: try receipts
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  receipts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gpulogyai/run-receipts@v0
+        with:
+          path: try
