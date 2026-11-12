@@ -147,7 +147,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gpulogyai/run-receipts@v0
+      - uses: letthembuild/run-receipts@v0
         with:
           path: receipts
 ```
@@ -175,7 +175,7 @@ The job fails when a receipt does not verify. A receipt that verifies and is gra
 To accept only receipts signed by keys you trust, list the keys in the workflow or in a repository variable. Do not read them from a file in the pull request: the pull request could change it.
 
 ```yaml
-      - uses: gpulogyai/run-receipts@v0
+      - uses: letthembuild/run-receipts@v0
         with:
           path: receipts
           require-signature: true
