@@ -1,0 +1,57 @@
+name: Verify run receipts
+description: Check the run receipts a pull request carries and report their grade, checks and gaps.
+author: GPULogy AI LLC
+branding:
+  icon: check-circle
+  color: gray-dark
+
+inputs:
+  path:
+    description: >-
+      Where the receipts are: files or folders, one per line, relative to the
+      workspace. A folder stands for every .json file inside it.
+    required: true
+  comment:
+    description: >-
+      Post the report on the pull request, updating the earlier one. Needs
+      "pull-requests: write". The report is always in the job summary too.
+    default: "true"
+  fail-on-grade:
+    description: >-
+      Grades that fail the job, separated by commas: any of failed,
+      unverified, not-visible, reviewed, partial, verified. A receipt that
+      does not verify always fails the job.
+    default: ""
+  if-no-receipt:
+    description: What to do when the path holds no receipt - error, warn or ignore.
+    default: warn
+  token:
+    description: The token the report is posted with.
+    default: ${{ github.token }}
+
+outputs:
+  count:
+    description: How many receipts were checked.
+    value: ${{ steps.verify.outputs.count }}
+  valid:
+    description: "true when at least one receipt was checked and every one verified."
+    value: ${{ steps.verify.outputs.valid }}
+  grade:
+    description: The grade, when exactly one receipt was checked and it verified.
+    value: ${{ steps.verify.outputs.grade }}
+  grades:
+    description: The grades of the receipts that verified, separated by commas.
+    value: ${{ steps.verify.outputs.grades }}
+
+runs:
+  using: composite
+  steps:
+    - id: verify
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/action.mjs"
+      env:
+        RR_PATH: ${{ inputs.path }}
+        RR_COMMENT: ${{ inputs.comment }}
+        RR_FAIL_ON_GRADE: ${{ inputs.fail-on-grade }}
+        RR_IF_NO_RECEIPT: ${{ inputs.if-no-receipt }}
+        RR_TOKEN: ${{ inputs.token }}
