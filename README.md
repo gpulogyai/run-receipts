@@ -11,6 +11,8 @@ This repository holds:
 - **[verify.mjs](verify.mjs)**: a verifier with no dependencies.
 - **[sign.mjs](sign.mjs)**: makes a signing key and signs a receipt with it.
 - **[PRODUCERS.md](PRODUCERS.md)**: how to write receipts from your own tool, with a worked example.
+- **[adapters/](adapters/README.md)**: a receipt from a log of what happened, for tools that would rather not build one.
+- **[DECIDING.md](DECIDING.md)**: how one producer, LetThemBuild, arrives at the verdicts its receipts carry.
 - **[action.yml](action.yml)**: a GitHub Action that verifies the receipts a pull request carries and reports them.
 - **[examples/](examples)**: two receipts to read and test against.
 
@@ -188,6 +190,21 @@ Three things to know:
 - **Pull requests from forks.** Their token cannot write, so the comment is skipped with a warning and the report is in the job summary. Keep the trigger as `pull_request`. Do not switch to `pull_request_target` to get the comment: that runs with your repository's permissions on a stranger's files.
 - **A receipt's text is treated as untrusted.** Names, commands and results are shown as plain text: they cannot add formatting, links or mentions to the comment, and they cannot issue commands to the runner.
 - **Requirements.** Node 18 or later on the runner, which GitHub's hosted runners have. The action installs nothing and makes no network call other than posting its comment.
+
+## Write receipts from your own tool
+
+There are two routes, and neither needs anything from LetThemBuild.
+
+- **Build the receipt yourself.** [PRODUCERS.md](PRODUCERS.md) walks through it, with [an example that runs](examples/produce.mjs).
+- **Write down what happens and have the receipt made for you.** The [adapters](adapters/README.md) take a run log (one line of JSON per event, from any language), a wrapper that records the commands a reviewer runs, or a one-file Python recorder.
+
+```bash
+npx -p @letthembuild/run-receipts run-receipt-from events run.jsonl --out receipt.json
+```
+
+## How one producer decides
+
+A receipt says "agreed" or "verified", and those words are only as good as the way the tool arrived at them. [DECIDING.md](DECIDING.md) describes how LetThemBuild's room does: when an agreement counts, when it is discarded, and what a missing reviewer does to the result. It is one tool's account and binds nobody else. If you write receipts, publishing your own is worth doing.
 
 ## What verifying proves, and what it does not
 

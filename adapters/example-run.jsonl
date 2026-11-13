@@ -1,0 +1,19 @@
+{"event":"start","at":"2026-11-12T09:28:25Z","producer":{"name":"example-producer","version":"0.0.1"},"revision":"4f1c2ab90d3e"}
+{"event":"seat","name":"Builder","role":"lead","model":"model-a","costBasis":"metered"}
+{"event":"seat","name":"First reviewer","role":"reviewer","model":"model-b","costBasis":"metered"}
+{"event":"seat","name":"Second reviewer","role":"reviewer","model":"model-c","costBasis":"subscription"}
+{"event":"turn","seat":"Builder","durationMs":30000,"costUsd":0.12,"tokens":16000}
+{"event":"command","by":"Builder","command":"npm test","exitCode":0,"result":"17 passing"}
+{"event":"turn","seat":"First reviewer","durationMs":14000,"costUsd":0.04,"tokens":6100}
+{"event":"command","by":"First reviewer","command":"npm test","exitCode":1,"purpose":"Run the unit tests","result":"1 failing"}
+{"event":"stance","seat":"First reviewer","stance":"objected"}
+{"event":"turn","seat":"Builder","durationMs":22000,"costUsd":0.09,"tokens":9800}
+{"event":"turn","seat":"First reviewer","durationMs":16000,"costUsd":0.04,"tokens":5900}
+{"event":"command","by":"First reviewer","command":"npm test","exitCode":0,"purpose":"Run the unit tests","result":"18 passing"}
+{"event":"stance","seat":"First reviewer","stance":"agreed"}
+{"event":"turn","seat":"Second reviewer","durationMs":21000,"tokens":4000}
+{"event":"command","by":"Second reviewer","command":"npm test","exitCode":0,"result":"18 passing"}
+{"event":"command","by":"Second reviewer","command":"API_TOKEN=abc123 npm run smoke","exitCode":0,"purpose":"Smoke test","result":"ok"}
+{"event":"stance","seat":"Second reviewer","stance":"agreed"}
+{"event":"gap","text":"Checked locally only; deployed behaviour not verified"}
+{"event":"end","at":"2026-11-12T09:30:00Z","filesChanged":2}
