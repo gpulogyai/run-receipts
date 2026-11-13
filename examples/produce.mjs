@@ -4,7 +4,8 @@
 //
 // An example producer: the least a tool needs to turn what it saw during a
 // run into a valid receipt. PRODUCERS.md walks through it. It is an example
-// to read and adapt, not a library; the rules it follows are SPEC.md's.
+// to read and adapt; the rules it follows are SPEC.md's. The adapters in
+// ../adapters build their receipts with it, so it is also kept correct.
 //
 //   node examples/produce.mjs            print a receipt for the sample run below
 

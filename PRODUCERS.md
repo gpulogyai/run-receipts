@@ -2,6 +2,8 @@
 
 This guide is for anyone whose tool runs a model to do work and other models to review it, and who wants that tool to write a run receipt when a run ends. [SPEC.md](SPEC.md) is the definition; this is the practical route through it.
 
+If you would rather not build receipts yourself, the [adapters](adapters/README.md) make one from a log of what happened: your tool writes a line as each thing happens, and the counting is done for you.
+
 You do not need any code from this repository to write a receipt. A receipt is one JSON file. You do need the verifier to check what you wrote, and you should never write a receipt that does not verify.
 
 ## The smallest valid receipt
